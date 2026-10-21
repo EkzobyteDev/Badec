@@ -1,0 +1,15 @@
+
+How to use (from folder = .):
+compile badec: make badec3
+compile undec: make undec3
+
+run badec: ./badec -R path/to/archive.bdc -Q path/to/file/to/archivate
+run undec: ./undec -R path/to/archive.bdc -Q path/to/folder/to/extract/files/ <- Note! All files in this folder will be overwritten
+
+to change compression method on yours:
+change code in huffman_code.c (do not touch huffman_code.h!)
+(You may rename functions/files but do not forget to add changes to makefile and badec.c/undec.c)
+
+In future I`ll refactor all this
+
+P.S: Do not forget to work in your own branch
