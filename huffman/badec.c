@@ -66,7 +66,8 @@ void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* a
 
                 char entry_name[strlen(current_dir_name) + 1 + strlen(dir_entry_ptr->d_name) + 1];
                 sprintf(entry_name, "%s/%s", current_dir_name, dir_entry_ptr->d_name);
-                           
+                       
+                //printf("Dir entry %s\n", dir_entry_ptr->d_name);
                 if (dir_entry_ptr->d_type == DT_DIR) {
                         handle_dir(home_dir_name, entry_name, archive);
                         continue;
@@ -80,6 +81,7 @@ void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* a
 void handle_file(const char* home_directory, const char* relative_file_path, FILE* archive) {
         char* absolute_file_path = (char*)alloca(strlen(home_directory) + 1 + strlen(relative_file_path) + 1);
         sprintf(absolute_file_path, "%s/%s", home_directory, relative_file_path);
+
         
         struct stat file_stat;
         stat(absolute_file_path, &file_stat);
@@ -89,15 +91,30 @@ void handle_file(const char* home_directory, const char* relative_file_path, FIL
         add_frequencies_to_table(file, ALPHABET_LENGTH, frequencies_table);
         
         size_t relative_file_path_length = strlen(relative_file_path) + 1;
-        fwrite(&huffman_encoding_code, sizeof(huffman_encoding_code), 1, archive);
+        fwrite(&huffman_encoding_code, sizeof(uint8_t), 1, archive);
         fwrite(frequencies_table, sizeof(uint8_t), ALPHABET_LENGTH, archive);
         fwrite(&relative_file_path_length, sizeof(size_t), 1, archive);
         fwrite(relative_file_path, sizeof(char), relative_file_path_length, archive);
         fwrite(&file_stat.st_size, sizeof(off_t), 1, archive);
+        
+        /*
+        for (int i = 0; i < 256; i++) {
+                printf("%3d ", frequencies_table[i]);
+        }
+        printf("\n");
+        */
 
         huffman_code codes[ALPHABET_LENGTH] = {0};
         get_huffman_codes(ALPHABET_LENGTH, frequencies_table, codes);
 
+        /*
+        for (int i = 0; i < 256; i++) {
+                if (codes[i].length == 0) continue;
+                printf("%3d: %*b\n", i, codes[i].length, codes[i].code);
+        }
+        printf("\n");
+        */
+        
         size_t lsum = 0;
         size_t cnt = 0;
         for (int i = 0; i < 256; i++) {
@@ -107,9 +124,11 @@ void handle_file(const char* home_directory, const char* relative_file_path, FIL
         }
         //printf("%d vs %d\n", lsum, cnt * 8);
         
+        //printf("File %s (%d b)\n", absolute_file_path, file_stat.st_size);
         for (off_t i = 0; i < file_stat.st_size; i++) {
                 uint8_t byte;
-                fread(&byte, sizeof(byte), 1, file);
+                fread(&byte, sizeof(uint8_t), 1, file);
+                //printf("d%d ", byte);
                 write_encoded_byte_to_archive(codes[byte], archive, i == 0, i == (file_stat.st_size - 1));
         }
         
@@ -154,17 +173,25 @@ void add_frequencies_to_table(FILE* file, uint64_t alphabet_length, uint8_t* fre
 
 void write_encoded_byte_to_archive(huffman_code code_of_byte, FILE* archive, bool start_over, bool force_write) {
         static huffman_code curr_code;
-        if (start_over) curr_code = empty_huffman_code;
+        static size_t bytes_written = 0;
+        if (start_over) {
+                curr_code = empty_huffman_code;
+                bytes_written = 0;
+                //printf("Start over\n");
+        }
 
         curr_code.code <<= code_of_byte.length;
         curr_code.code |= code_of_byte.code & (((uint64_t)1 << code_of_byte.length) - 1);
         curr_code.length += code_of_byte.length;
+        //printf("%d|%d ", code_of_byte.length, curr_code.length);
 
         while (curr_code.length >= 8) {
                 uint64_t code_copy = curr_code.code;
                 code_copy >>= (curr_code.length - 8);
 
                 fwrite(&code_copy, sizeof(uint8_t), 1, archive);
+                //printf("w%d ", (uint8_t)code_copy);
+                bytes_written++;
                 curr_code.length -= 8;
         }
         if (force_write && curr_code.length != 0) {
@@ -172,5 +199,9 @@ void write_encoded_byte_to_archive(huffman_code code_of_byte, FILE* archive, boo
                 code_copy <<= (8 - curr_code.length);
 
                 fwrite(&code_copy, sizeof(uint8_t), 1, archive);
+                //printf("w%d ", (uint8_t)code_copy);
+                bytes_written++;
+
         }
+        //if (force_write) printf("Wrote %d bytes\n", bytes_written);
 }

@@ -39,6 +39,7 @@ uint8_t get_byte_from_code(uint64_t alphabet_length, huffman_code code, huffman_
         for (uint64_t i = 0; i < alphabet_length; i++) {
                 if (codes[i].code == code.code && codes[i].length == code.length) {
                         *success = true;
+                        //printf("%3d ", i);
                         return i;
                 }
         }
