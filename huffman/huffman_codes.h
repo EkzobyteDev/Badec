@@ -12,12 +12,12 @@ typedef struct huffman_tree_node{
         struct huffman_tree_node* node_on_1_side;
 }huffman_tree_node;
 
-
-
 typedef struct {
         uint64_t code;
         uint8_t  length;
 }huffman_code;
 
-void get_huffman_codes(uint64_t alphabet_length, uint8_t* frequencies_table, huffman_code* codes);
+
+void get_shannon_codes(uint64_t alphabet_length, uint8_t* frequencies_table, huffman_code* codes);
 uint8_t get_byte_from_code(uint64_t alphabet_length, huffman_code code, huffman_code* codes, bool* success);
+size_t compute_compressed_file_size(uint64_t alphabet_length, huffman_code* codes, uint8_t* frequencies_table, bool include_freq_table);

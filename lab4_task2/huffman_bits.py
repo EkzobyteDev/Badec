@@ -243,5 +243,4 @@ def main():
         print(f"Результаты сохранены: {results_dir / 'result.txt'}")
 
 
-if __name__ == "__main__":
-    main()
+main()

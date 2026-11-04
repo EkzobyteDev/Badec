@@ -24,7 +24,7 @@ bool bytes_equal(const uint8_t* a, const uint8_t* b, size_t bytes_count) {
 int main(int argc, char** argv) {
         char* archive_path;
         char* output_path;
-        get_paths_from_args(argc, argv, &archive_path, &output_path);
+        get_paths_from_args(argc, argv, &archive_path, &output_path, NULL);
         
         if (output_path[strlen(output_path) - 1] != '/') {
                 fprintf(stderr, "Failed to unarchive %s. -Q argument has to be a folder (i.e has to end with \"/\")\n", archive_path);

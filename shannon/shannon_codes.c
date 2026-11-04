@@ -17,7 +17,7 @@ int cmp_shannon_symbols(const void* a, const void* b) {
         return (int)a_symbol->value - (int)b_symbol->value;
 }
 
-uint8_t get_byte_from_code(uint64_t alphabet_length, huffman_code code, huffman_code* codes, bool* success) {
+uint8_t get_byte_from_code(uint64_t alphabet_length, shannon_code code, shannon_code* codes, bool* success) {
         for (uint64_t i = 0; i < alphabet_length; i++) {
                 if (codes[i].code == code.code && codes[i].length == code.length) {
                         *success = true;
@@ -33,7 +33,7 @@ uint8_t get_byte_from_code(uint64_t alphabet_length, huffman_code code, huffman_
 //   code(a)   = first length(a) bits of the binary fraction P(a) = cum(a) / total,
 //               where cum(a) is the sum of frequencies of symbols before a in sorted order.
 // Everything is computed in integers: code(a) = floor(cum(a) * 2^length(a) / total).
-void get_huffman_codes(uint64_t alphabet_length, uint8_t* frequencies_table, huffman_code* codes) {
+void get_shannon_codes(uint64_t alphabet_length, uint8_t* frequencies_table, shannon_code* codes) {
         shannon_symbol sorted_symbols[alphabet_length];
         size_t symbols_count = 0;
         uint64_t total = 0;
@@ -67,4 +67,16 @@ void get_huffman_codes(uint64_t alphabet_length, uint8_t* frequencies_table, huf
                 codes[sorted_symbols[i].value].length = length;
                 cumulative += frequency;
         }
+}
+
+
+size_t compute_compressed_file_size(uint64_t alphabet_length, shannon_code* codes, uint8_t* frequencies_table, bool include_freq_table) {
+        size_t size = 0;
+        for (uint16_t i = 0; i < alphabet_length; i++) {
+                size += codes[i].length * frequencies_table[i];
+        }
+        if (include_freq_table) {
+                size += sizeof(uint8_t) * alphabet_length;
+        }
+        return size;
 }

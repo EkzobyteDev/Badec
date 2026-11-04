@@ -4,6 +4,7 @@
 #include <sys/sendfile.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <unistd.h>
 #include "header.h"
 #include "huffman_codes.h"
 #include "../path_extractor.h"
@@ -25,7 +26,7 @@ bool bytes_equal(const uint8_t* a, const uint8_t* b, size_t bytes_count) {
 int main(int argc, char** argv) {
         char* archive_path;
         char* output_path;
-        get_paths_from_args(argc, argv, &archive_path, &output_path);
+        get_paths_from_args(argc, argv, &archive_path, &output_path, NULL);
         
         if (output_path[strlen(output_path) - 1] != '/') {
                 fprintf(stderr, "Failed to unarchive %s. -Q argument has to be a folder (i.e has to end with \"/\")\n", archive_path);
@@ -48,11 +49,13 @@ int main(int argc, char** argv) {
                 return 1;
         }
 
-        if (R_header.version != 2) {
+        if (R_header.version != 3) {
                 fprintf(stderr, "Failed to unarchive %s. Version %d is incompatible with this decoder\n", archive_path, R_header.version);
+                char path[128];
+                sprintf(path, "./legacy/undec_v%d", R_header.version);
+                execv(path, argv);
                 return 1;
         }
-
 
         if (R_header.directory_is_archived) {
                 while(feof(archive) == false) {
@@ -92,9 +95,6 @@ int create_file_from_archive(const char* home_directory_path, FILE* archive) {
         if (feof(archive)) {
                 return 0;
         }
-
-        uint8_t frequencies_table[ALPHABET_LENGTH];
-        fread(frequencies_table, sizeof(uint8_t), ALPHABET_LENGTH, archive);
         
         size_t relative_file_path_length;
         fread(&relative_file_path_length, sizeof(size_t), 1, archive);
@@ -113,34 +113,18 @@ int create_file_from_archive(const char* home_directory_path, FILE* archive) {
                 return 1;
         }
 
-
-        /*
-        for (int i = 0; i < 256; i++) {
-                printf("%3d ", frequencies_table[i]);
-        }
-        printf("\n");
-        */
-
-
         mk_path(absolute_file_path);
         FILE* file = fopen(absolute_file_path, "wb");
 
-        //printf("File %s (%d b)\n", absolute_file_path, file_size);
-        if (encoding_code == 0) {
-                fflush(file);
+        if (encoding_code == no_compression_encoding_code) {
                 sendfile(fileno(file), fileno(archive), NULL, (size_t)file_size);
         }
-        else if (encoding_code == 1) {
+        else if (encoding_code == huffman_encoding_code) {
+                uint8_t frequencies_table[ALPHABET_LENGTH];
+                fread(frequencies_table, sizeof(uint8_t), ALPHABET_LENGTH, archive);
+
                 huffman_code codes[ALPHABET_LENGTH] = {0};
-                get_huffman_codes(ALPHABET_LENGTH, frequencies_table, codes);
-                
-                /*
-                for (int i = 0; i < 256; i++) {
-                        if (codes[i].length == 0) continue;
-                        printf("%3d: %*b\n", i, codes[i].length, codes[i].code);
-                }
-                printf("\n");
-                */
+                get_shannon_codes(ALPHABET_LENGTH, frequencies_table, codes);
 
                 write_encoded_byte_to_file(0, NULL, 0, NULL, true);
 
@@ -151,8 +135,6 @@ int create_file_from_archive(const char* home_directory_path, FILE* archive) {
                         bytes_readen++;
                 }
                 while (write_encoded_byte_to_file(byte, codes, (size_t)file_size, file, false) == false);
-
-                //printf("Read %d bytes\n", bytes_readen);
         }
         
         fclose(file);
@@ -168,26 +150,21 @@ bool write_encoded_byte_to_file(uint8_t byte_from_archive, huffman_code* codes, 
                 return false;
         }
 
-        //printf("r%d ", (uint8_t)byte_from_archive);
         for (int i = 0; i < 8; i++) {
                 code.code <<= 1;
                 code.code |= ((byte_from_archive >> (8 - i - 1)) & 1);
                 code.length++;
-                //printf("%b.%d ", code.code, code.length);
                 
                 bool success;
                 uint8_t byte = get_byte_from_code(ALPHABET_LENGTH, code, codes, &success);
 
                 if (success == false) continue;
-                
-                //printf("d%d ", byte);
 
                 fwrite(&byte, sizeof(byte), 1, file);
                 code = empty_huffman_code;
                 bytes_decoded++;
 
                 if (bytes_decoded == file_size) {
-                        //printf("Filesize reached (%d b / %d b)\n", bytes_decoded, file_size);
                         return true;
                 }
         }

@@ -12,16 +12,17 @@
 #include "../path_extractor.h"
 
 
-void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* archive);
-void handle_file(const char* home_directory, const char* relative_file_path, FILE* archive);
+void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* archive, bool do_not_analyze);
+void handle_file(const char* home_directory, const char* relative_file_path, FILE* archive, bool do_not_analyze);
 
 void add_frequencies_to_table(FILE* file, uint64_t alphabet_length, uint8_t* frequencies_table);
-void write_encoded_byte_to_archive(huffman_code code_of_byte, FILE* archive, bool start_over, bool force_write);
+void write_encoded_byte_to_archive(shannon_code code_of_byte, FILE* archive, bool start_over, bool force_write);
 
 int main(int argc, char** argv) {
         char* archive_path;
         char* path_to_archiving_subject;
-        get_paths_from_args(argc, argv, &archive_path, &path_to_archiving_subject);
+        bool  do_not_analyze;
+        get_paths_from_args(argc, argv, &archive_path, &path_to_archiving_subject, &do_not_analyze);
         
         struct stat Q_stat;
         if (stat(path_to_archiving_subject, &Q_stat) != 0) {
@@ -40,20 +41,20 @@ int main(int argc, char** argv) {
         fflush(R);
 
         if (R_header.directory_is_archived) {
-                handle_dir(path_to_archiving_subject, "", R);
+                handle_dir(path_to_archiving_subject, "", R, do_not_analyze);
         }
         else {
                 char* file_name_substr = strrchr(path_to_archiving_subject, '/');
                 *file_name_substr = '\0';
                 file_name_substr++;
 
-                handle_file(path_to_archiving_subject, file_name_substr, R);
+                handle_file(path_to_archiving_subject, file_name_substr, R, do_not_analyze);
         }
 
         fclose(R);
 }
 
-void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* archive) {
+void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* archive, bool do_not_analyze) {
         char* current_dir_full_name = (char*)alloca(strlen(home_dir_name) + 1 + strlen(current_dir_name) + 1);
         sprintf(current_dir_full_name, "%s/%s", home_dir_name, current_dir_name);
         DIR* dir = opendir(current_dir_full_name);
@@ -69,16 +70,16 @@ void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* a
                        
                 //printf("Dir entry %s\n", dir_entry_ptr->d_name);
                 if (dir_entry_ptr->d_type == DT_DIR) {
-                        handle_dir(home_dir_name, entry_name, archive);
+                        handle_dir(home_dir_name, entry_name, archive, do_not_analyze);
                         continue;
                 }
                 
-                handle_file(home_dir_name, entry_name, archive);
+                handle_file(home_dir_name, entry_name, archive, do_not_analyze);
         }
         closedir(dir);
 }
 
-void handle_file(const char* home_directory, const char* relative_file_path, FILE* archive) {
+void handle_file(const char* home_directory, const char* relative_file_path, FILE* archive, bool do_not_analyze) {
         char* absolute_file_path = (char*)alloca(strlen(home_directory) + 1 + strlen(relative_file_path) + 1);
         sprintf(absolute_file_path, "%s/%s", home_directory, relative_file_path);
 
@@ -90,47 +91,35 @@ void handle_file(const char* home_directory, const char* relative_file_path, FIL
         uint8_t frequencies_table[ALPHABET_LENGTH] = {0};
         add_frequencies_to_table(file, ALPHABET_LENGTH, frequencies_table);
         
+        shannon_code codes[ALPHABET_LENGTH] = {0};
+        get_shannon_codes(ALPHABET_LENGTH, frequencies_table, codes);
+
+        size_t compressed_file_size = compute_compressed_file_size(ALPHABET_LENGTH, codes, frequencies_table, true);
+        uint8_t encoding_code = (compressed_file_size >= file_stat.st_size) ? no_compression_encoding_code : shannon_encoding_code;
+        if (do_not_analyze) {
+                encoding_code = shannon_encoding_code;
+        }
+        
         size_t relative_file_path_length = strlen(relative_file_path) + 1;
-        fwrite(&shannon_encoding_code, sizeof(uint8_t), 1, archive);
-        fwrite(frequencies_table, sizeof(uint8_t), ALPHABET_LENGTH, archive);
+        fwrite(&encoding_code, sizeof(uint8_t), 1, archive);
         fwrite(&relative_file_path_length, sizeof(size_t), 1, archive);
         fwrite(relative_file_path, sizeof(char), relative_file_path_length, archive);
         fwrite(&file_stat.st_size, sizeof(off_t), 1, archive);
         
-        /*
-        for (int i = 0; i < 256; i++) {
-                printf("%3d ", frequencies_table[i]);
+        if (encoding_code == no_compression_encoding_code) {
+                fflush(archive);
+                sendfile(fileno(archive), fileno(file), NULL, file_stat.st_size);
         }
-        printf("\n");
-        */
-
-        huffman_code codes[ALPHABET_LENGTH] = {0};
-        get_huffman_codes(ALPHABET_LENGTH, frequencies_table, codes);
-
-        /*
-        for (int i = 0; i < 256; i++) {
-                if (codes[i].length == 0) continue;
-                printf("%3d: %*b\n", i, codes[i].length, codes[i].code);
+        else {
+                fwrite(frequencies_table, sizeof(uint8_t), ALPHABET_LENGTH, archive);
+                for (off_t i = 0; i < file_stat.st_size; i++) {
+                        uint8_t byte;
+                        fread(&byte, sizeof(uint8_t), 1, file);
+                        //printf("d%d ", byte);
+                        write_encoded_byte_to_archive(codes[byte], archive, i == 0, i == (file_stat.st_size - 1));
+                }
         }
-        printf("\n");
-        */
         
-        size_t lsum = 0;
-        size_t cnt = 0;
-        for (int i = 0; i < 256; i++) {
-                lsum += codes[i].length * frequencies_table[i];
-                if (codes[i].length != 0) cnt += frequencies_table[i];
-                //printf("%d (l=%d f=%d): %0*b\n", i, codes[i].length, frequencies_table[i], codes[i].length, codes[i].code);
-        }
-        //printf("%d vs %d\n", lsum, cnt * 8);
-        
-        //printf("File %s (%d b)\n", absolute_file_path, file_stat.st_size);
-        for (off_t i = 0; i < file_stat.st_size; i++) {
-                uint8_t byte;
-                fread(&byte, sizeof(uint8_t), 1, file);
-                //printf("d%d ", byte);
-                write_encoded_byte_to_archive(codes[byte], archive, i == 0, i == (file_stat.st_size - 1));
-        }
         
         fflush(archive);
         fclose(file);
@@ -171,8 +160,8 @@ void add_frequencies_to_table(FILE* file, uint64_t alphabet_length, uint8_t* fre
         fseek(file, 0, SEEK_SET);
 }
 
-void write_encoded_byte_to_archive(huffman_code code_of_byte, FILE* archive, bool start_over, bool force_write) {
-        static huffman_code curr_code;
+void write_encoded_byte_to_archive(shannon_code code_of_byte, FILE* archive, bool start_over, bool force_write) {
+        static shannon_code curr_code;
         static size_t bytes_written = 0;
         if (start_over) {
                 curr_code = empty_huffman_code;

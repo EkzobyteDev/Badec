@@ -6,6 +6,7 @@
 #include <dirent.h>
 #include "header_v2.h"
 #include "path_extractor.h"
+#include <alloca.h>
 
 
 void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* archive);
@@ -64,7 +65,7 @@ void create_file_from_archive(const char* home_directory_path, const char* relat
 }
 
 void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* archive) {
-        char current_dir_full_name[strlen(home_dir_name) + 1 + strlen(current_dir_name) + 1] = "";
+        char* current_dir_full_name = (char*)alloca(strlen(home_dir_name) + 1 + strlen(current_dir_name) + 1);     
         sprintf(current_dir_full_name, "%s/%s", home_dir_name, current_dir_name);
         DIR* dir = opendir(current_dir_full_name);
         

@@ -12,15 +12,16 @@
 #include "../path_extractor.h"
 
 
-void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* archive);
-void handle_file(const char* home_directory, const char* relative_file_path, FILE* archive);
+void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* archive, bool  do_not_analyze);
+void handle_file(const char* home_directory, const char* relative_file_path, FILE* archive, bool  do_not_analyze);
 
 void add_frequencies_to_table(FILE* file, uint64_t alphabet_length, uint8_t* frequencies_table);
 
 int main(int argc, char** argv) {
         char* archive_path;
         char* path_to_archiving_subject;
-        get_paths_from_args(argc, argv, &archive_path, &path_to_archiving_subject);
+        bool  do_not_analyze;
+        get_paths_from_args(argc, argv, &archive_path, &path_to_archiving_subject, &do_not_analyze);
         
         struct stat Q_stat;
         if (stat(path_to_archiving_subject, &Q_stat) != 0) {
@@ -39,20 +40,20 @@ int main(int argc, char** argv) {
         fflush(R);
 
         if (R_header.directory_is_archived) {
-                handle_dir(path_to_archiving_subject, "", R);
+                handle_dir(path_to_archiving_subject, "", R, do_not_analyze);
         }
         else {
                 char* file_name_substr = strrchr(path_to_archiving_subject, '/');
                 *file_name_substr = '\0';
                 file_name_substr++;
 
-                handle_file(path_to_archiving_subject, file_name_substr, R);
+                handle_file(path_to_archiving_subject, file_name_substr, R, do_not_analyze);
         }
 
         fclose(R);
 }
 
-void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* archive) {
+void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* archive, bool  do_not_analyze) {
         char* current_dir_full_name = (char*)alloca(strlen(home_dir_name) + 1 + strlen(current_dir_name) + 1);
         sprintf(current_dir_full_name, "%s/%s", home_dir_name, current_dir_name);
         DIR* dir = opendir(current_dir_full_name);
@@ -68,16 +69,16 @@ void handle_dir(const char* home_dir_name, const char* current_dir_name, FILE* a
                        
                 //printf("Dir entry %s\n", dir_entry_ptr->d_name);
                 if (dir_entry_ptr->d_type == DT_DIR) {
-                        handle_dir(home_dir_name, entry_name, archive);
+                        handle_dir(home_dir_name, entry_name, archive, do_not_analyze);
                         continue;
                 }
                 
-                handle_file(home_dir_name, entry_name, archive);
+                handle_file(home_dir_name, entry_name, archive, do_not_analyze);
         }
         closedir(dir);
 }
 
-void handle_file(const char* home_directory, const char* relative_file_path, FILE* archive) {
+void handle_file(const char* home_directory, const char* relative_file_path, FILE* archive, bool  do_not_analyze) {
         char* absolute_file_path = (char*)alloca(strlen(home_directory) + 1 + strlen(relative_file_path) + 1);
         sprintf(absolute_file_path, "%s/%s", home_directory, relative_file_path);
 
@@ -95,13 +96,6 @@ void handle_file(const char* home_directory, const char* relative_file_path, FIL
         fwrite(&relative_file_path_length, sizeof(size_t), 1, archive);
         fwrite(relative_file_path, sizeof(char), relative_file_path_length, archive);
         fwrite(&file_stat.st_size, sizeof(off_t), 1, archive);
-        
-        /*
-        for (int i = 0; i < 256; i++) {
-                printf("%3d ", frequencies_table[i]);
-        }
-        printf("\n");
-        */
 
         arithmetic_encode_file(file, file_stat.st_size, frequencies_table, archive);
 

@@ -1,14 +1,15 @@
 cc = g++
 v  = 2
+config = shannon
 
-badec: badec_v$(v).cpp header_v$(v).h path_extractor.*
-	rm -f badec && $(cc) badec_v$(v).cpp header_v$(v).h path_extractor.* -o badec
+badec: v$(v)/badec_v$(v).cpp v$(v)/header_v$(v).h v$(v)/path_extractor.c v$(v)/path_extractor.h
+	rm -f legacy/badec_v$(v) && $(cc) v$(v)/badec_v$(v).cpp v$(v)/header_v$(v).h v$(v)/path_extractor.* -o legacy/badec_v$(v)
 
-undec: undec_v$(v).cpp header_v$(v).h path_extractor.*
-	rm -f undec && $(cc) undec_v$(v).cpp header_v$(v).h path_extractor.* -o undec
+undec: v$(v)/undec_v$(v).cpp v$(v)/header_v$(v).h v$(v)/path_extractor.c v$(v)/path_extractor.h
+	rm -f legacy/undec_v$(v) && $(cc) v$(v)/undec_v$(v).cpp v$(v)/header_v$(v).h v$(v)/path_extractor.* -o legacy/undec_v$(v)
 
 badec3:
-	gcc path_extractor.* huffman/badec.c huffman/header.h huffman/huffman_codes.c huffman/huffman_codes.h  -o badec
+	gcc path_extractor.* $(config)/badec.c $(config)/header.h $(config)/*_codes.c $(config)/*_codes.h  -o badec
 
 undec3:
-	gcc path_extractor.* huffman/undec.c huffman/header.h huffman/huffman_codes.c huffman/huffman_codes.h  -o undec
+	gcc path_extractor.* $(config)/undec.c $(config)/header.h $(config)/*_codes.c $(config)/*_codes.h  -o undec

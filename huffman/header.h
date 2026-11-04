@@ -31,10 +31,10 @@ typedef struct {
         // If files are encoded independently:
         // File 1:
         // uint8_t encoding_algorithm;
-        // uint8_t byte_frequencies[256];
         // size_t filename_length;
         // char*    filename;
         // uint32_t file_size;
+        // uint8_t byte_frequencies[256];
         // uint8_t*  data
         // File 2
         // ...

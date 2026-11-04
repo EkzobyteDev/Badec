@@ -11,7 +11,7 @@
 
 int create_file_from_archive(const char* home_directory_path, FILE* archive);
 void mk_path(const char* path_to_file);
-bool write_encoded_byte_to_file(uint8_t byte_from_archive, huffman_code* codes, size_t file_size, FILE* file, bool start_over);
+bool write_encoded_byte_to_file(uint8_t byte_from_archive, shannon_code* codes, size_t file_size, FILE* file, bool start_over);
 
 bool bytes_equal(const uint8_t* a, const uint8_t* b, size_t bytes_count) {
         for (size_t i = 0; i < bytes_count; i++) {
@@ -25,7 +25,7 @@ bool bytes_equal(const uint8_t* a, const uint8_t* b, size_t bytes_count) {
 int main(int argc, char** argv) {
         char* archive_path;
         char* output_path;
-        get_paths_from_args(argc, argv, &archive_path, &output_path);
+        get_paths_from_args(argc, argv, &archive_path, &output_path, NULL);
         
         if (output_path[strlen(output_path) - 1] != '/') {
                 fprintf(stderr, "Failed to unarchive %s. -Q argument has to be a folder (i.e has to end with \"/\")\n", archive_path);
@@ -93,8 +93,6 @@ int create_file_from_archive(const char* home_directory_path, FILE* archive) {
                 return 0;
         }
 
-        uint8_t frequencies_table[ALPHABET_LENGTH];
-        fread(frequencies_table, sizeof(uint8_t), ALPHABET_LENGTH, archive);
         
         size_t relative_file_path_length;
         fread(&relative_file_path_length, sizeof(size_t), 1, archive);
@@ -107,38 +105,41 @@ int create_file_from_archive(const char* home_directory_path, FILE* archive) {
 
         char absolute_file_path[strlen(home_directory_path) + strlen(relative_file_path) + 1];
         sprintf(absolute_file_path, "%s%s", home_directory_path, relative_file_path);
-
+        
         if (encoding_code != no_compression_encoding_code && encoding_code != shannon_encoding_code) {
                 fprintf(stderr, "Failed to unarchive file %s. Wrong compression algorithm code\n", relative_file_path);
                 return 1;
         }
 
-
+        
         /*
         for (int i = 0; i < 256; i++) {
                 printf("%3d ", frequencies_table[i]);
-        }
+                }
         printf("\n");
         */
+       
 
-
-        mk_path(absolute_file_path);
-        FILE* file = fopen(absolute_file_path, "wb");
-
+       mk_path(absolute_file_path);
+       FILE* file = fopen(absolute_file_path, "wb");
+       
         //printf("File %s (%d b)\n", absolute_file_path, file_size);
         if (encoding_code == no_compression_encoding_code) {
                 fflush(file);
                 sendfile(fileno(file), fileno(archive), NULL, (size_t)file_size);
         }
         else if (encoding_code == shannon_encoding_code) {
-                huffman_code codes[ALPHABET_LENGTH] = {0};
-                get_huffman_codes(ALPHABET_LENGTH, frequencies_table, codes);
+                uint8_t frequencies_table[ALPHABET_LENGTH];
+                fread(frequencies_table, sizeof(uint8_t), ALPHABET_LENGTH, archive);
+                
+                shannon_code codes[ALPHABET_LENGTH] = {0};
+                get_shannon_codes(ALPHABET_LENGTH, frequencies_table, codes);
                 
                 /*
                 for (int i = 0; i < 256; i++) {
                         if (codes[i].length == 0) continue;
                         printf("%3d: %*b\n", i, codes[i].length, codes[i].code);
-                }
+                        }
                 printf("\n");
                 */
 
@@ -159,8 +160,8 @@ int create_file_from_archive(const char* home_directory_path, FILE* archive) {
         return 0;
 }
 
-bool write_encoded_byte_to_file(uint8_t byte_from_archive, huffman_code* codes, size_t file_size, FILE* file, bool start_over) {
-        static huffman_code code;
+bool write_encoded_byte_to_file(uint8_t byte_from_archive, shannon_code* codes, size_t file_size, FILE* file, bool start_over) {
+        static shannon_code code;
         static size_t bytes_decoded;
         if (start_over) {
                 code = empty_huffman_code;

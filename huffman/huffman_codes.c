@@ -13,8 +13,7 @@ int cmp_huffman_tree_nodes(const void* a, const void* b) {
         else if (a_node->frequency < b_node->frequency) {
                 return 1;
         }
-        return 0;
-        //return (uint16_t)a_node->value - b_node->value;
+        return (uint16_t)a_node->value - b_node->value;
 }
 
 void convert_tree_to_codes(huffman_code current_code, huffman_tree_node* current_node, uint64_t alphabet_length, huffman_code* codes) {
@@ -35,18 +34,7 @@ void convert_tree_to_codes(huffman_code current_code, huffman_tree_node* current
         convert_tree_to_codes(path_1, current_node->node_on_1_side, alphabet_length, codes);
 }
 
-uint8_t get_byte_from_code(uint64_t alphabet_length, huffman_code code, huffman_code* codes, bool* success) {
-        for (uint64_t i = 0; i < alphabet_length; i++) {
-                if (codes[i].code == code.code && codes[i].length == code.length) {
-                        *success = true;
-                        //printf("%3d ", i);
-                        return i;
-                }
-        }
-        *success = false;
-}
-
-void get_huffman_codes(uint64_t alphabet_length, uint8_t* frequencies_table, huffman_code* codes) {      
+void get_shannon_codes(uint64_t alphabet_length, uint8_t* frequencies_table, huffman_code* codes) {      
         huffman_tree_node sorted_frequencies_table[alphabet_length];
         for (size_t i = 0; i < alphabet_length; i++) {
                 sorted_frequencies_table[i].frequency = frequencies_table[i];
@@ -76,10 +64,32 @@ void get_huffman_codes(uint64_t alphabet_length, uint8_t* frequencies_table, huf
                 sorted_frequencies_table[elements_left - 2].node_on_0_side = a_copy;
                 sorted_frequencies_table[elements_left - 2].node_on_1_side = b_copy;
                 sorted_frequencies_table[elements_left - 2].frequency      = a_copy->frequency + b_copy->frequency;
-
+                
                 elements_left--;
                 qsort(sorted_frequencies_table, elements_left, sizeof(huffman_tree_node), cmp_huffman_tree_nodes); 
         }
-
+        
         convert_tree_to_codes(empty_huffman_code, &sorted_frequencies_table[0], alphabet_length, codes);
+}
+
+uint8_t get_byte_from_code(uint64_t alphabet_length, huffman_code code, huffman_code* codes, bool* success) {
+        for (uint64_t i = 0; i < alphabet_length; i++) {
+                if (codes[i].code == code.code && codes[i].length == code.length) {
+                        *success = true;
+                        //printf("%3d ", i);
+                        return i;
+                }
+        }
+        *success = false;
+}
+
+size_t compute_compressed_file_size(uint64_t alphabet_length, huffman_code* codes, uint8_t* frequencies_table, bool include_freq_table) {
+        size_t size = 0;
+        for (uint16_t i = 0; i < alphabet_length; i++) {
+                size += codes[i].length * frequencies_table[i];
+        }
+        if (include_freq_table) {
+                size += sizeof(uint8_t) * alphabet_length;
+        }
+        return size;
 }

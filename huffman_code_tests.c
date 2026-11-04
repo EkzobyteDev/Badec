@@ -15,7 +15,7 @@ int main() {
         frequencies_table['c'] = 1;
         frequencies_table['d'] = 1;
 
-        get_huffman_codes(ALPHABET_LENGTH, frequencies_table, codes);
+        get_shannon_codes(ALPHABET_LENGTH, frequencies_table, codes);
 
         char str[5] = "rabcd";
         for (int i = 0; i < 5; i++) {
