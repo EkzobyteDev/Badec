@@ -13,3 +13,9 @@ badec3:
 
 undec3:
 	gcc path_extractor.* $(config)/undec.c $(config)/header.h $(config)/*_codes.c $(config)/*_codes.h  -o undec
+
+rlebadec:
+	gcc path_extractor.* rle/badec.c rle/header.h -o badec
+
+rleundec:
+	gcc path_extractor.* rle/undec.c rle/header.h -o undec
